@@ -45,6 +45,55 @@ class lstsq_torch(nn.Module):
     def lstsq(self, K, y, optimizer='SGD', lr=0.02,
                n_epoch=200, log_interval=1, scheduler_step=100, gamma=0.75,
                eval_call=None, verbose=False, **kwargs):
+        """
+        Solves the linear equation Kx = y by minimizing the squared error
+        $\|Kx - y\|^2$ with respect to x using gradient descent. This allows
+        us to solve kernel ridge regression problems with large number of 
+        training samples without the need for matrix inversion which is very
+        expensive computationally. Gradient descent on the other hand, with 
+        appropritate choise of learning rate converges very fast specially 
+        if the original kernel ridge regression problem has a positive regularization
+        parameter which guarantees the quadratic probelm here to be strongly convex
+        and hence linearly converging.
+
+        Parameters
+        ----------
+        K : numpy array
+            The "data" matrix in the equation Kx=y.
+        y : numpy array
+            The response matrix in the equation Kx=y.
+        optimizer : str, optional
+            The optimizer to use to solve the quadratic problem. See 
+            create_optimizer method for a list of defined optimizers. 
+            The default is 'SGD'.
+        lr : float, optional
+            Learning rate of the optimizer. The default is 0.02.
+        n_epoch : int, optional
+            number of epochs for the optimizer to run. The default is 200.
+        log_interval : int, optional
+            After how many epochs a summary of the results should be printed in
+            std_out. Note that verbose should be set to True. The default is 1.
+        scheduler_step : int, optional
+            after how many epochs should the learning rate scheduler take a step. 
+            The default is 100.
+        gamma : float, optional
+            the scaling factor of the learning rate in the scheduler. The 
+            default is 0.75.
+        eval_call : function, optional
+            Any function that should be called in each epoch, e.g to see performance
+            on test data, etc. The default is None.
+        verbose : bool, optional
+            If true, a summary of the state of optimization problem is printed
+            every log_interval. The default is False.
+        **kwargs : TYPE
+            Other optimizaer specefic arguments that should be passed to it.
+
+        Returns
+        -------
+        coef : numpy array
+            The solution x that minimizes $\|Kx - y\|^2$ .
+
+        """
         if not torch.is_tensor(K):
             K = torch.tensor(K, dtype=self.dtype)
         if not torch.is_tensor(y):
