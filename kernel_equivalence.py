@@ -11,6 +11,31 @@ from time import time
 
 class kernel_equivalence():
     def __init__(self, p, g, g1, g2, S=None, device='cpu'):
+        """
+        Equivalence of inner product kernels and linear models
+
+        Parameters
+        ----------
+        p : int
+            Number of covariates.
+        g : function
+            the function defining the kernel:
+            K(x1, x2) = g(<x1, x2>/p)
+            
+        g1 : function 
+            first derivative of g.
+        g2 : function
+            second derivative of g.
+        S : numpy array
+            The covairince matrix of the data. The default is None.
+        device : torch device, optional
+            The device to use. The default is 'cpu'.
+
+        Returns
+        -------
+        None.
+
+        """
         self.p = p
         self.S = np.eye(p) if S is None else S
         self.S2 = self.S.dot(self.S)
@@ -23,6 +48,15 @@ class kernel_equivalence():
         self.lr = False
         
     def get_c(self):
+        """
+        Computes the coefficients of the equivalent linear kernel from the 
+        function g and its first and second derivatives.
+
+        Returns
+        -------
+        None.
+
+        """
         tau = np.trace(self.S)/self.p
         c0 = self.g(tau) -self.g(0) - self.g1(0)*tau
         c1 = self.g(0) + self.g2(0)*np.trace(self.S2)/(2*self.p**2)
@@ -30,6 +64,38 @@ class kernel_equivalence():
         self.c0, self.c1, self.c2 = c0, c1, c2
         
     def kernel_regression_fit(self, X, y, lam, method='numpy', lr=0.02, n_epoch=200):
+        """
+        Fits the kernel ridge regression (KRR) model to the data X, y with 
+        regularization parameter lam.
+
+        Parameters
+        ----------
+        X : numpy array
+            The input data (n times p) where n is the number of samples and p
+            is the number of covariates.
+        y : numpy array
+            The outputs data.
+        lam : float
+            The regularization parameter for kernel ridge regression.
+        method : str, optional
+            Whether to solve the kernel ridge regression by matrix inversion in
+            numpy or using gradient descent in pytorch. For large number of samples
+            the matrix inversion becomes prohibitively computationally expensive
+            and hence 'torch' is recommended. When using torch, the learning rate
+            as well as the number of epochs should be carefully chosen in order
+            to get as close as desired to the true solution. The default is 'numpy'.
+        lr : float, optional
+            The learning rate of gradient descent when using torch to solve the
+            kernel ridge regression problem. The default is 0.02.
+        n_epoch : int, optional
+            Number of epochs to use to solve the KRR when 'torch' is used to fit
+            the model. The default is 200.
+
+        Returns
+        -------
+        None.
+
+        """
         n, p = X.shape
         self.X = X
         self.y = y
@@ -43,6 +109,26 @@ class kernel_equivalence():
         self.kr = True
         
     def kernel_eval(self, X_ts):
+        """
+        Evalutes the output of kernel model on test data X_ts
+
+        Parameters
+        ----------
+        X_ts : numpy array
+            Test data of size n_ts times p where n_ts is the number of test
+            samples and p is the number of covariates.
+
+        Raises
+        ------
+        ValueError
+            When kernel model is not yet fitted an error is raised.
+
+        Returns
+        -------
+        y_ts : numpy array
+            The output of the kernel model.
+
+        """
         if not self.kr:
             raise ValueError('Kernel regression not fitted yet.')
         self.k_kr = self.g(X_ts.dot(self.X.T)/self.p)
@@ -51,6 +137,44 @@ class kernel_equivalence():
     
     def linear_regression(self, X, y, lam1, lam2, lam3=1, method='numpy', 
                           lr=0.02, n_epoch=200):
+        """
+        Fits the equivalent linear ridge regression model to the data X, y with 
+        regularization parameters lam1, lam2, lam3.
+
+        Parameters
+        ----------
+        X : numpy array
+            The input data (n times p) where n is the number of samples and p
+            is the number of covariates.
+        y : numpy array
+            The outputs data.
+        lam1 : float
+            The regularization parameter for the bias term. These parameters can
+            be derived by calling the reg_from_lam method.
+        lam2 : float
+            The regularization parameter for the weight term
+        lam3 : float
+            A parameter to make the linear kernel equivalent to the origiginal
+            kernel
+        method : str, optional
+            Whether to solve the kernel ridge regression by matrix inversion in
+            numpy or using gradient descent in pytorch. For large number of samples
+            the matrix inversion becomes prohibitively computationally expensive
+            and hence 'torch' is recommended. When using torch, the learning rate
+            as well as the number of epochs should be carefully chosen in order
+            to get as close as desired to the true solution. The default is 'numpy'.
+        lr : float, optional
+            The learning rate of gradient descent when using torch to solve the
+            kernel ridge regression problem. The default is 0.02.
+        n_epoch : int, optional
+            Number of epochs to use to solve the KRR when 'torch' is used to fit
+            the model. The default is 200.
+
+        Returns
+        -------
+        None.
+
+        """
         n, p = X.shape
         self.X = X
         self.y = y
@@ -66,6 +190,26 @@ class kernel_equivalence():
         self.lr = True
         
     def lin_val(self, X_ts):
+        """
+        Evaluates the equivalent linear model on test data
+
+        Parameters
+        ----------
+        X_ts : numpy array
+            Test data of size n_ts times p where n_ts is the number of test
+            samples and p is the number of covariates.
+
+        Raises
+        ------
+        ValueError
+            When linear model is not yet fitted an error is raised.
+
+        Returns
+        -------
+        y_ts : numpy array
+            The output of the linear model.
+
+        """
         if not self.lr:
             raise ValueError('Linear regression not fitted yet.')
         self.k_lr = X_ts.dot(self.X.T)/self.lam2 + 1/self.lam1
@@ -75,6 +219,30 @@ class kernel_equivalence():
         return y_ts
     
     def reg_from_lam(self, lam, eq_kernel=True):
+        """
+        Finds the appropriate regularization parametes for the linear model
+        from the regularization parameter of the kernel ridge regression model.
+
+        Parameters
+        ----------
+        lam : float
+            regularization parameter of the KRR model.
+        eq_kernel : bool, optional
+            To produce lam3 which makes the kernel matrices of the linear kernel
+            and the origianl kernel equal in opertor norm or not. The default is True.
+
+        Returns
+        -------
+        These parameters can be passed directly to the linear_regression method.
+        
+        lam1 : float
+            Regularization parameter of the bias term.
+        lam2 : float
+            Regularization parameter of the weight.
+        lam3 : float
+            
+
+        """
         self.get_c()
         if eq_kernel:
             lam1 = 1/self.c1
